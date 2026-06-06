@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schengen Stay Calculator</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:           #0c111d;
+    --surface:      #161b2e;
+    --surface2:     #1e2642;
+    --surface3:     #252d4a;
+    --border:       #2d3660;
+    --accent:       #5865f2;
+    --accent2:      #7983f5;
+    --accent-dim:   rgba(88,101,242,0.18);
+    --accent-mid:   rgba(88,101,242,0.35);
+    --text:         #e8eaf6;
+    --muted:        #7b84b0;
+    --faint:        #444d78;
+    --green:        #22c55e;
+    --yellow:       #eab308;
+    --red:          #ef4444;
+    --radius:       14px;
+    --radius-sm:    8px;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 2rem 1rem 4rem;
+  }
+
+  .app { max-width: 1080px; margin: 0 auto; }
+
+  /* ── Header ── */
+  header {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+  .header-flag {
+    font-size: 2.6rem;
+    line-height: 1;
+    margin-bottom: .6rem;
+    display: block;
+  }
+  header h1 {
+    font-size: 1.9rem;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    background: linear-gradient(130deg, #818cf8, #c084fc 60%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: .35rem;
+  }
+  header p {
+    color: var(--muted);
+    font-size: .92rem;
+  }
+
+  /* ── Rule pill ── */
+  .rule-pill {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    background: var(--accent-dim);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: .45rem 1rem;
+    font-size: .82rem;
+    color: var(--accent2);
+    width: fit-content;
+    margin: 0 auto 2rem;
+  }
+
+  /* ── Section label ── */
+  .section-label {
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .section-label .hint {
+    font-size: .78rem;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--faint);
+    font-style: italic;
+    transition: color .2s;
+  }
+  .section-label .hint.active { color: var(--accent2); }
+
+  /* ── Months grid ── */
+  .months-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  @media (max-width: 860px) { .months-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 480px) { .months-grid { grid-template-columns: 1fr; } }
+
+  /* ── Month card ── */
+  .month-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: .9rem;
+  }
+  .month-title {
+    text-align: center;
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: .7rem;
+  }
+  .month-title span {
+    color: var(--muted);
+    font-weight: 400;
+    margin-left: .25rem;
+  }
+
+  /* ── Day grid ── */
+  .day-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+  }
+  .dh {
+    text-align: center;
+    font-size: .6rem;
+    color: var(--faint);
+    padding-bottom: 3px;
+    font-weight: 500;
+  }
+  .day {
+    text-align: center;
+    font-size: .72rem;
+    line-height: 1;
+    padding: 4px 1px;
+    border-radius: 4px;
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    transition: background .08s;
+    z-index: 0;
+  }
+  .day.empty { cursor: default; }
+  .day.future { color: var(--faint); cursor: not-allowed; pointer-events: none; }
+  .day.other-month { opacity: 0; pointer-events: none; }
+
+  .day:not(.empty):not(.future):not(.in-range):not(.range-start):not(.range-end):not(.range-single):not(.selecting):hover {
+    background: var(--surface3);
+  }
+
+  /* Range styles */
+  .day.in-range {
+    background: var(--accent-dim);
+    border-radius: 0;
+    color: var(--accent2);
+  }
+  .day.range-start {
+    background: var(--accent);
+    color: #fff;
+    border-radius: 6px 0 0 6px;
+    font-weight: 600;
+  }
+  .day.range-end {
+    background: var(--accent);
+    color: #fff;
+    border-radius: 0 6px 6px 0;
+    font-weight: 600;
+  }
+  .day.range-single {
+    background: var(--accent);
+    color: #fff;
+    border-radius: 6px;
+    font-weight: 600;
+  }
+
+  /* Preview while selecting */
+  .day.preview {
+    background: var(--accent-mid);
+    border-radius: 0;
+    color: var(--accent2);
+  }
+  .day.preview-start {
+    background: var(--accent-mid);
+    border-radius: 6px 0 0 6px;
+    color: var(--accent2);
+  }
+  .day.preview-end {
+    background: var(--accent-mid);
+    border-radius: 0 6px 6px 0;
+    color: var(--accent2);
+  }
+  .day.preview-single {
+    background: var(--accent-mid);
+    border-radius: 6px;
+    color: var(--accent2);
+  }
+
+  /* Selecting (pending start) */
+  .day.selecting {
+    background: var(--accent2);
+    color: #fff;
+    border-radius: 6px;
+    font-weight: 600;
+    animation: blink 1.1s ease infinite;
+  }
+
+  /* Today dot */
+  .day.today::after {
+    content: '';
+    position: absolute;
+    bottom: 1px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--accent2);
+  }
+  .day.in-range.today::after,
+  .day.range-start.today::after,
+  .day.range-end.today::after,
+  .day.range-single.today::after { background: rgba(255,255,255,.7); }
+
+  @keyframes blink {
+    0%,100% { opacity: 1; }
+    50% { opacity: .5; }
+  }
+
+  /* ── Clear btn ── */
+  .btn-clear {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: .3rem .85rem;
+    font-size: .75rem;
+    color: var(--muted);
+    cursor: pointer;
+    transition: border-color .15s, color .15s;
+    white-space: nowrap;
+  }
+  .btn-clear:hover { border-color: var(--red); color: var(--red); }
+
+  /* ── Bottom row ── */
+  .bottom-row {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 1.5rem;
+    align-items: start;
+  }
+  @media (max-width: 700px) { .bottom-row { grid-template-columns: 1fr; } }
+
+  /* ── Entry calendar ── */
+  .entry-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    width: 230px;
+    flex-shrink: 0;
+  }
+  @media (max-width: 700px) { .entry-card { width: 100%; } }
+
+  .entry-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: .7rem;
+  }
+  .entry-nav .month-label {
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .nav-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    width: 26px;
+    height: 26px;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: .85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color .15s, color .15s;
+  }
+  .nav-btn:hover { border-color: var(--accent); color: var(--accent2); }
+
+  .entry-day {
+    text-align: center;
+    font-size: .72rem;
+    line-height: 1;
+    padding: 4px 1px;
+    border-radius: 4px;
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    transition: background .08s;
+    color: var(--text);
+  }
+  .entry-day.empty { pointer-events: none; }
+  .entry-day.other-month { opacity: 0; pointer-events: none; }
+  .entry-day:not(.empty):hover { background: var(--surface3); }
+  .entry-day.selected {
+    background: #22c55e;
+    color: #fff;
+    font-weight: 700;
+    border-radius: 6px;
+  }
+  .entry-day.today-e::after {
+    content: '';
+    position: absolute;
+    bottom: 1px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 3px; height: 3px;
+    border-radius: 50%;
+    background: var(--accent2);
+  }
+  .entry-day.selected.today-e::after { background: rgba(255,255,255,.7); }
+
+  .entry-display {
+    margin-top: .7rem;
+    text-align: center;
+    font-size: .78rem;
+    color: var(--muted);
+    min-height: 1.2em;
+  }
+  .entry-display strong { color: var(--green); }
+
+  /* ── Right panel ── */
+  .right-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+  }
+
+  /* Selected ranges summary */
+  .ranges-summary {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem 1.2rem;
+    min-height: 80px;
+  }
+  .ranges-summary-title {
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: .6rem;
+  }
+  .ranges-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+  }
+  .range-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    background: var(--accent-dim);
+    border: 1px solid var(--accent);
+    border-radius: 100px;
+    padding: .2rem .6rem .2rem .75rem;
+    font-size: .72rem;
+    color: var(--accent2);
+  }
+  .range-chip-days {
+    background: var(--accent);
+    color: #fff;
+    border-radius: 100px;
+    padding: .05rem .4rem;
+    font-size: .65rem;
+    font-weight: 700;
+  }
+  .range-remove {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    font-size: .85rem;
+    display: flex;
+    align-items: center;
+    transition: color .15s;
+  }
+  .range-remove:hover { color: var(--red); }
+  .no-ranges {
+    font-size: .8rem;
+    color: var(--faint);
+    font-style: italic;
+  }
+
+  /* Calculate button */
+  .btn-calc {
+    background: linear-gradient(135deg, var(--accent), #7c3aed);
+    border: none;
+    border-radius: var(--radius-sm);
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 700;
+    padding: .85rem 2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    transition: opacity .15s, transform .1s;
+    width: 100%;
+    justify-content: center;
+    letter-spacing: .01em;
+  }
+  .btn-calc:hover { opacity: .9; transform: translateY(-1px); }
+  .btn-calc:active { transform: translateY(0); }
+
+  /* ── Result card ── */
+  .result-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    display: none;
+  }
+  .result-card.visible { display: block; }
+
+  .result-main {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 1.2rem;
+  }
+  .result-circle {
+    flex-shrink: 0;
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 3px solid;
+    position: relative;
+  }
+  .result-circle.green  { border-color: var(--green);  background: rgba(34,197,94,.1); }
+  .result-circle.yellow { border-color: var(--yellow); background: rgba(234,179,8,.1); }
+  .result-circle.red    { border-color: var(--red);    background: rgba(239,68,68,.1); }
+
+  .result-num {
+    font-size: 1.8rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+  .result-circle.green  .result-num  { color: var(--green); }
+  .result-circle.yellow .result-num  { color: var(--yellow); }
+  .result-circle.red    .result-num  { color: var(--red); }
+  .result-unit { font-size: .6rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+
+  .result-info h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: .3rem;
+  }
+  .result-info p {
+    font-size: .82rem;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .result-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: .7rem;
+  }
+  @media (max-width: 500px) { .result-grid { grid-template-columns: 1fr 1fr; } }
+
+  .stat-box {
+    background: var(--surface2);
+    border-radius: var(--radius-sm);
+    padding: .7rem .9rem;
+    text-align: center;
+  }
+  .stat-val {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-bottom: .15rem;
+  }
+  .stat-val.green  { color: var(--green); }
+  .stat-val.yellow { color: var(--yellow); }
+  .stat-val.red    { color: var(--red); }
+  .stat-label {
+    font-size: .66rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+  }
+  .exit-date-label {
+    font-size: .7rem;
+    color: var(--muted);
+    text-align: center;
+    margin-top: .8rem;
+  }
+  .exit-date-label strong { color: var(--text); }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <header>
+    <span class="header-flag">🇪🇺</span>
+    <h1>Schengen Stay Calculator</h1>
+    <p>Track your 90/180-day rolling window allowance</p>
+  </header>
+
+  <div class="rule-pill">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    Max <strong style="margin:0 .25rem">90 days</strong> in any <strong style="margin:0 .25rem">180-day</strong> rolling period in the Schengen Area
+  </div>
+
+  <!-- Stays section label -->
+  <div class="section-label" style="margin-bottom:.75rem">
+    <span>Past Schengen Stays — select date ranges</span>
+    <div style="display:flex;align-items:center;gap:.75rem">
+      <span class="hint" id="hint-text">Click a day to start a range</span>
+      <button class="btn-clear" onclick="clearAll()">Clear All</button>
+    </div>
+  </div>
+
+  <!-- 8-month calendar grid -->
+  <div id="months-grid" class="months-grid"></div>
+
+  <!-- Bottom row: entry calendar + right panel -->
+  <div class="bottom-row">
+
+    <!-- Entry date calendar -->
+    <div>
+      <div class="section-label" style="margin-bottom:.75rem">Next Entry Date</div>
+      <div class="entry-card">
+        <div class="entry-nav">
+          <button class="nav-btn" onclick="entryNavMonth(-1)">‹</button>
+          <span class="month-label" id="entry-month-label"></span>
+          <button class="nav-btn" onclick="entryNavMonth(1)">›</button>
+        </div>
+        <div id="entry-grid" class="day-grid"></div>
+        <div class="entry-display" id="entry-display">No date selected</div>
+      </div>
+    </div>
+
+    <!-- Right panel -->
+    <div class="right-panel">
+
+      <!-- Selected ranges summary -->
+      <div>
+        <div class="section-label" style="margin-bottom:.75rem">Selected Stay Periods</div>
+        <div class="ranges-summary">
+          <div class="ranges-list" id="ranges-list">
+            <span class="no-ranges">No periods selected yet. Click on the calendar above.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Calculate button -->
+      <button class="btn-calc" onclick="calculate()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+        Calculate Remaining Days
+      </button>
+
+      <!-- Result -->
+      <div class="result-card" id="result-card">
+        <div class="result-main">
+          <div class="result-circle" id="result-circle">
+            <span class="result-num" id="result-num">—</span>
+            <span class="result-unit">days left</span>
+          </div>
+          <div class="result-info">
+            <h3 id="result-title">—</h3>
+            <p id="result-desc">—</p>
+          </div>
+        </div>
+        <div class="result-grid">
+          <div class="stat-box">
+            <div class="stat-val" id="stat-used">—</div>
+            <div class="stat-label">Days Used</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val" id="stat-left">—</div>
+            <div class="stat-label">Days Left</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val" id="stat-window">180</div>
+            <div class="stat-label">Day Window</div>
+          </div>
+        </div>
+        <div class="exit-date-label" id="exit-date-label"></div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─────────────────────────── STATE ───────────────────────────
+const today = (function() { const d = new Date(); d.setHours(0,0,0,0); return d; })();
+
+let ranges       = [];      // [{start: Date, end: Date}]
+let pendingStart = null;    // Date | null  — first click waiting for second
+let hoverDate    = null;    // Date | null  — for preview highlight
+let entryDate    = null;    // Date | null
+let entryViewYear  = today.getFullYear();
+let entryViewMonth = today.getMonth();
+
+// ─────────────────────────── UTILS ───────────────────────────
+const MONTH_NAMES = ['January','February','March','April','May','June',
+                     'July','August','September','October','November','December'];
+const DAY_HEADERS = ['Mo','Tu','We','Th','Fr','Sa','Su'];
+
+function dn(y, m, d) { return new Date(y, m, d); }
+
+function sameDay(a, b) {
+  return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+}
+
+function dowMon(date) { return (date.getDay() + 6) % 7; } // Mon=0, Sun=6
+
+function addDays(date, n) { const r = new Date(date); r.setDate(r.getDate()+n); return r; }
+
+function daysInRange(r) {
+  return Math.round((r.end - r.start) / 86400000) + 1;
+}
+
+function fmtDate(d) {
+  return `${d.getDate()} ${MONTH_NAMES[d.getMonth()].slice(0,3)} ${d.getFullYear()}`;
+}
+
+function isInAnyRange(date) {
+  return ranges.some(r => date >= r.start && date <= r.end);
+}
+
+function findRangeAt(date) {
+  return ranges.find(r => date >= r.start && date <= r.end) || null;
+}
+
+// ─────────────────────────── MAIN CALENDAR ───────────────────────────
+function getDisplayMonths() {
+  // 8 months: 7 months ago → current month
+  const months = [];
+  for (let i = 7; i >= 0; i--) {
+    months.push(dn(today.getFullYear(), today.getMonth() - i, 1));
+  }
+  return months;
+}
+
+function renderMainCalendars() {
+  const grid = document.getElementById('months-grid');
+  grid.innerHTML = '';
+  getDisplayMonths().forEach(m => grid.appendChild(buildMonthCard(m, false)));
+}
+
+function buildMonthCard(monthDate, isEntry) {
+  const year  = monthDate.getFullYear();
+  const month = monthDate.getMonth();
+  const daysCount = dn(year, month+1, 0).getDate();
+  const firstDow  = dowMon(dn(year, month, 1));     // Mon=0
+  const totalCells = Math.ceil((firstDow + daysCount) / 7) * 7;
+
+  const card = document.createElement('div');
+  card.className = 'month-card';
+
+  const title = document.createElement('div');
+  title.className = 'month-title';
+  title.innerHTML = `${MONTH_NAMES[month]} <span>${year}</span>`;
+  card.appendChild(title);
+
+  const dayGrid = document.createElement('div');
+  dayGrid.className = 'day-grid';
+
+  // Day headers
+  DAY_HEADERS.forEach(h => {
+    const el = document.createElement('div');
+    el.className = 'dh';
+    el.textContent = h;
+    dayGrid.appendChild(el);
+  });
+
+  // Cells
+  for (let i = 0; i < totalCells; i++) {
+    const dayNum = i - firstDow + 1;
+    const el = document.createElement('div');
+    el.className = 'day';
+
+    if (dayNum < 1 || dayNum > daysCount) {
+      el.classList.add('other-month');
+      el.textContent = '';
+    } else {
+      const date = dn(year, month, dayNum);
+      const isFuture = date > today;
+
+      el.textContent = dayNum;
+
+      if (isFuture) {
+        el.classList.add('future');
+      } else {
+        if (sameDay(date, today)) el.classList.add('today');
+        el.dataset.date = `${year}-${month}-${dayNum}`;
+        applyRangeClass(el, date);
+
+        el.addEventListener('click',      () => handleDayClick(date));
+        el.addEventListener('mouseenter', () => handleHover(date));
+        el.addEventListener('mouseleave', () => handleLeave(date));
+      }
+    }
+    dayGrid.appendChild(el);
+  }
+
+  card.appendChild(dayGrid);
+  return card;
+}
+
+function applyRangeClass(el, date) {
+  // Pending-start blink
+  if (pendingStart && sameDay(date, pendingStart)) {
+    el.classList.add('selecting');
+    return;
+  }
+
+  // Actual ranges
+  const inRange   = isInAnyRange(date);
+  const isStart   = ranges.some(r => sameDay(r.start, date));
+  const isEnd     = ranges.some(r => sameDay(r.end,   date));
+
+  if (inRange) {
+    if (isStart && isEnd) el.classList.add('range-single');
+    else if (isStart)     el.classList.add('range-start');
+    else if (isEnd)       el.classList.add('range-end');
+    else                  el.classList.add('in-range');
+  }
+}
+
+// ─────────────────────────── INTERACTIONS ───────────────────────────
+function handleDayClick(date) {
+  if (date > today) return;
+
+  if (!pendingStart) {
+    // If clicking inside an existing range → remove it
+    const existing = findRangeAt(date);
+    if (existing) {
+      ranges = ranges.filter(r => r !== existing);
+      updateAll();
+      return;
+    }
+    // Start selection
+    pendingStart = date;
+  } else {
+    if (sameDay(date, pendingStart)) {
+      // Cancel selection by clicking same day
+      pendingStart = null;
+      hoverDate = null;
+    } else {
+      // Complete range
+      const s = pendingStart < date ? pendingStart : date;
+      const e = pendingStart < date ? date : pendingStart;
+      ranges.push({ start: s, end: e });
+      ranges.sort((a,b) => a.start - b.start);
+      pendingStart = null;
+      hoverDate = null;
+    }
+  }
+  updateAll();
+}
+
+function handleHover(date) {
+  if (pendingStart) { hoverDate = date; updatePreviewClasses(); }
+}
+
+function handleLeave(date) {
+  if (pendingStart) { hoverDate = null; updatePreviewClasses(); }
+}
+
+function updatePreviewClasses() {
+  const previewCls = ['preview', 'preview-start', 'preview-end', 'preview-single'];
+  document.querySelectorAll('.day[data-date]').forEach(el => {
+    el.classList.remove(...previewCls);
+    if (!pendingStart) return;
+    const [y, m, d] = el.dataset.date.split('-').map(Number);
+    const date = dn(y, m, d);
+    if (hoverDate) {
+      const ps = pendingStart <= hoverDate ? pendingStart : hoverDate;
+      const pe = pendingStart <= hoverDate ? hoverDate    : pendingStart;
+      if (date >= ps && date <= pe) {
+        if (sameDay(date, ps) && sameDay(date, pe)) el.classList.add('preview-single');
+        else if (sameDay(date, ps))                 el.classList.add('preview-start');
+        else if (sameDay(date, pe))                 el.classList.add('preview-end');
+        else                                         el.classList.add('preview');
+      }
+    }
+  });
+}
+
+function clearAll() {
+  ranges = [];
+  pendingStart = null;
+  hoverDate = null;
+  updateAll();
+  document.getElementById('result-card').classList.remove('visible');
+}
+
+// ─────────────────────────── ENTRY CALENDAR ───────────────────────────
+function renderEntryCalendar() {
+  document.getElementById('entry-month-label').textContent =
+    `${MONTH_NAMES[entryViewMonth].slice(0,3)} ${entryViewYear}`;
+
+  const grid = document.getElementById('entry-grid');
+  grid.innerHTML = '';
+
+  // Day headers
+  DAY_HEADERS.forEach(h => {
+    const el = document.createElement('div');
+    el.className = 'dh';
+    el.textContent = h;
+    grid.appendChild(el);
+  });
+
+  const year  = entryViewYear;
+  const month = entryViewMonth;
+  const daysCount  = dn(year, month+1, 0).getDate();
+  const firstDow   = dowMon(dn(year, month, 1));
+  const totalCells = Math.ceil((firstDow + daysCount) / 7) * 7;
+
+  for (let i = 0; i < totalCells; i++) {
+    const dayNum = i - firstDow + 1;
+    const el = document.createElement('div');
+    el.className = 'entry-day';
+
+    if (dayNum < 1 || dayNum > daysCount) {
+      el.classList.add('other-month');
+    } else {
+      const date = dn(year, month, dayNum);
+      el.textContent = dayNum;
+      if (sameDay(date, today)) el.classList.add('today-e');
+      if (entryDate && sameDay(date, entryDate)) el.classList.add('selected');
+      el.addEventListener('click', () => {
+        entryDate = date;
+        renderEntryCalendar();
+        updateEntryDisplay();
+        document.getElementById('result-card').classList.remove('visible');
+      });
+    }
+    grid.appendChild(el);
+  }
+}
+
+function entryNavMonth(delta) {
+  entryViewMonth += delta;
+  if (entryViewMonth > 11) { entryViewMonth = 0;  entryViewYear++; }
+  if (entryViewMonth < 0)  { entryViewMonth = 11; entryViewYear--; }
+  renderEntryCalendar();
+}
+
+function updateEntryDisplay() {
+  const el = document.getElementById('entry-display');
+  if (entryDate) {
+    el.innerHTML = `Entry: <strong>${fmtDate(entryDate)}</strong>`;
+  } else {
+    el.textContent = 'No date selected';
+  }
+}
+
+// ─────────────────────────── RANGES SUMMARY ───────────────────────────
+function renderRangesSummary() {
+  const list = document.getElementById('ranges-list');
+  list.innerHTML = '';
+
+  if (ranges.length === 0) {
+    list.innerHTML = '<span class="no-ranges">No periods selected yet. Click on the calendar above.</span>';
+    return;
+  }
+
+  ranges.forEach((r, i) => {
+    const days = daysInRange(r);
+    const chip = document.createElement('div');
+    chip.className = 'range-chip';
+    chip.innerHTML = `
+      ${fmtDate(r.start)} – ${fmtDate(r.end)}
+      <span class="range-chip-days">${days}d</span>
+      <button class="range-remove" title="Remove" onclick="removeRange(${i})">✕</button>
+    `;
+    list.appendChild(chip);
+  });
+}
+
+function removeRange(i) {
+  ranges.splice(i, 1);
+  updateAll();
+}
+
+// ─────────────────────────── HINT ───────────────────────────
+function updateHint() {
+  const hint = document.getElementById('hint-text');
+  if (pendingStart) {
+    hint.textContent = `Start: ${fmtDate(pendingStart)} — now click the end date`;
+    hint.classList.add('active');
+  } else {
+    hint.textContent = ranges.length
+      ? 'Click a highlighted range to remove it, or click to add a new range'
+      : 'Click a day to start a range';
+    hint.classList.remove('active');
+  }
+}
+
+// ─────────────────────────── CALCULATE ───────────────────────────
+function calculate() {
+  if (!entryDate) {
+    shakeBtn();
+    alert('Please select your planned entry date in the calendar on the left.');
+    return;
+  }
+
+  // 180-day window: (entryDate - 179 days) through entryDate inclusive
+  const windowStart = addDays(entryDate, -179);
+
+  // Count unique days in Schengen within the window
+  const usedSet = new Set();
+  const cur = new Date(windowStart);
+  while (cur <= entryDate) {
+    if (isInAnyRange(cur)) {
+      usedSet.add(cur.getFullYear()*10000 + cur.getMonth()*100 + cur.getDate());
+    }
+    cur.setDate(cur.getDate()+1);
+  }
+
+  const daysUsed = usedSet.size;
+  const daysLeft = Math.max(0, 90 - daysUsed);
+  const latestExit = daysLeft > 0 ? addDays(entryDate, daysLeft - 1) : null;
+
+  showResult(daysUsed, daysLeft, latestExit);
+}
+
+function showResult(used, left, latestExit) {
+  const card   = document.getElementById('result-card');
+  const circle = document.getElementById('result-circle');
+  const numEl  = document.getElementById('result-num');
+  const titleEl= document.getElementById('result-title');
+  const descEl = document.getElementById('result-desc');
+  const statUsed = document.getElementById('stat-used');
+  const statLeft = document.getElementById('stat-left');
+  const exitLabel= document.getElementById('exit-date-label');
+
+  // Color coding
+  circle.className = 'result-circle';
+  numEl.textContent = left;
+
+  let color, title, desc;
+  if (left === 0) {
+    color = 'red';
+    title = 'No days remaining';
+    desc  = `You've used all 90 days in the current 180-day window. Entry not permitted.`;
+  } else if (left <= 15) {
+    color = 'yellow';
+    title = `${left} day${left===1?'':'s'} remaining`;
+    desc  = `Very limited time — plan your stay carefully to avoid overstaying.`;
+  } else {
+    color = 'green';
+    title = `${left} day${left===1?'':'s'} remaining`;
+    desc  = `You have ${left} days available in the Schengen Area from your entry date.`;
+  }
+
+  circle.classList.add(color);
+  titleEl.textContent = title;
+  descEl.textContent  = desc;
+
+  statUsed.textContent = used;
+  statUsed.className   = `stat-val ${used >= 75 ? 'red' : used >= 60 ? 'yellow' : 'green'}`;
+
+  statLeft.textContent = left;
+  statLeft.className   = `stat-val ${color}`;
+
+  if (latestExit && left > 0) {
+    exitLabel.innerHTML = `Latest exit date: <strong>${fmtDate(latestExit)}</strong>`;
+  } else {
+    exitLabel.textContent = '';
+  }
+
+  card.classList.add('visible');
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function shakeBtn() {
+  const btn = document.querySelector('.btn-calc');
+  btn.style.transform = 'translateX(-5px)';
+  setTimeout(() => btn.style.transform = 'translateX(5px)', 80);
+  setTimeout(() => btn.style.transform = '', 160);
+}
+
+// ─────────────────────────── UPDATE ALL ───────────────────────────
+function updateAll() {
+  renderMainCalendars();
+  renderRangesSummary();
+  updateHint();
+}
+
+// ─────────────────────────── KEYBOARD ───────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && pendingStart) {
+    pendingStart = null;
+    hoverDate = null;
+    updateAll();
+  }
+});
+
+// ─────────────────────────── INIT ───────────────────────────
+renderMainCalendars();
+renderEntryCalendar();
+updateEntryDisplay();
+renderRangesSummary();
+updateHint();
+</script>
+</body>
+</html>
