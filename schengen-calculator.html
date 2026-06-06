@@ -158,12 +158,16 @@
     z-index: 0;
   }
   .day.empty { cursor: default; }
-  .day.future { color: var(--faint); cursor: not-allowed; pointer-events: none; }
+  .day.future { color: #6b7db3; font-style: italic; }
   .day.other-month { opacity: 0; pointer-events: none; }
 
-  .day:not(.empty):not(.future):not(.in-range):not(.range-start):not(.range-end):not(.range-single):not(.selecting):hover {
+  .day:not(.empty):not(.in-range):not(.range-start):not(.range-end):not(.range-single):not(.selecting):hover {
     background: var(--surface3);
   }
+
+  /* Future month card subtle tint */
+  .month-card.future-month { border-color: #252d4a; background: #171d30; }
+  .month-card.future-month .month-title { color: #8892c0; }
 
   /* Range styles */
   .day.in-range {
@@ -711,9 +715,9 @@ function findRangeAt(date) {
 
 // ─────────────────────────── MAIN CALENDAR ───────────────────────────
 function getDisplayMonths() {
-  // 8 months: 7 months ago → current month
+  // 12 months: 7 past + current + 4 future
   const months = [];
-  for (let i = 7; i >= 0; i--) {
+  for (let i = 7; i >= -4; i--) {
     months.push(dn(today.getFullYear(), today.getMonth() - i, 1));
   }
   return months;
@@ -733,7 +737,8 @@ function buildMonthCard(monthDate, isEntry) {
   const totalCells = Math.ceil((firstDow + daysCount) / 7) * 7;
 
   const card = document.createElement('div');
-  card.className = 'month-card';
+  const isFutureMonth = dn(year, month, 1) > dn(today.getFullYear(), today.getMonth(), 1);
+  card.className = 'month-card' + (isFutureMonth ? ' future-month' : '');
 
   const title = document.createElement('div');
   title.className = 'month-title';
@@ -765,18 +770,14 @@ function buildMonthCard(monthDate, isEntry) {
       const isFuture = date > today;
 
       el.textContent = dayNum;
+      if (isFuture)              el.classList.add('future');
+      if (sameDay(date, today))  el.classList.add('today');
+      el.dataset.date = `${year}-${month}-${dayNum}`;
+      applyRangeClass(el, date);
 
-      if (isFuture) {
-        el.classList.add('future');
-      } else {
-        if (sameDay(date, today)) el.classList.add('today');
-        el.dataset.date = `${year}-${month}-${dayNum}`;
-        applyRangeClass(el, date);
-
-        el.addEventListener('click',      () => handleDayClick(date));
-        el.addEventListener('mouseenter', () => handleHover(date));
-        el.addEventListener('mouseleave', () => handleLeave(date));
-      }
+      el.addEventListener('click',      () => handleDayClick(date));
+      el.addEventListener('mouseenter', () => handleHover(date));
+      el.addEventListener('mouseleave', () => handleLeave(date));
     }
     dayGrid.appendChild(el);
   }
@@ -807,8 +808,6 @@ function applyRangeClass(el, date) {
 
 // ─────────────────────────── INTERACTIONS ───────────────────────────
 function handleDayClick(date) {
-  if (date > today) return;
-
   if (!pendingStart) {
     // If clicking inside an existing range → remove it
     const existing = findRangeAt(date);
