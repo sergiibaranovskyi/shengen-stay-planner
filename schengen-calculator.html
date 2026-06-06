@@ -195,26 +195,16 @@
   }
 
   /* Preview while selecting */
-  .day.preview {
-    background: var(--accent-mid);
-    border-radius: 0;
-    color: var(--accent2);
-  }
-  .day.preview-start {
-    background: var(--accent-mid);
-    border-radius: 6px 0 0 6px;
-    color: var(--accent2);
-  }
-  .day.preview-end {
-    background: var(--accent-mid);
-    border-radius: 0 6px 6px 0;
-    color: var(--accent2);
-  }
-  .day.preview-single {
-    background: var(--accent-mid);
-    border-radius: 6px;
-    color: var(--accent2);
-  }
+  .day.preview        { background: var(--accent-mid); border-radius: 0;            color: var(--accent2); }
+  .day.preview-start  { background: var(--accent-mid); border-radius: 6px 0 0 6px; color: var(--accent2); }
+  .day.preview-end    { background: var(--accent-mid); border-radius: 0 6px 6px 0; color: var(--accent2); }
+  .day.preview-single { background: var(--accent-mid); border-radius: 6px;          color: var(--accent2); }
+
+  /* Blocked preview (overlaps existing range) */
+  .day.preview-blocked        { background: rgba(239,68,68,.18); border-radius: 0;            color: #f87171; }
+  .day.preview-blocked-start  { background: rgba(239,68,68,.18); border-radius: 6px 0 0 6px; color: #f87171; }
+  .day.preview-blocked-end    { background: rgba(239,68,68,.18); border-radius: 0 6px 6px 0; color: #f87171; }
+  .day.preview-blocked-single { background: rgba(239,68,68,.18); border-radius: 6px;          color: #f87171; }
 
   /* Selecting (pending start) */
   .day.selecting {
@@ -713,6 +703,10 @@ function findRangeAt(date) {
   return ranges.find(r => date >= r.start && date <= r.end) || null;
 }
 
+function overlapsAnyRange(start, end) {
+  return ranges.some(r => start <= r.end && r.start <= end);
+}
+
 // ─────────────────────────── MAIN CALENDAR ───────────────────────────
 function getDisplayMonths() {
   // 12 months: 7 past + current + 4 future
@@ -827,6 +821,10 @@ function handleDayClick(date) {
       // Complete range
       const s = pendingStart < date ? pendingStart : date;
       const e = pendingStart < date ? date : pendingStart;
+      if (overlapsAnyRange(s, e)) {
+        showHintError('Overlaps an existing range — pick a different period');
+        return; // keep pendingStart so user can try another end date
+      }
       ranges.push({ start: s, end: e });
       ranges.sort((a,b) => a.start - b.start);
       pendingStart = null;
@@ -845,21 +843,22 @@ function handleLeave(date) {
 }
 
 function updatePreviewClasses() {
-  const previewCls = ['preview', 'preview-start', 'preview-end', 'preview-single'];
+  const allPreviewCls = ['preview', 'preview-start', 'preview-end', 'preview-single',
+                         'preview-blocked', 'preview-blocked-start', 'preview-blocked-end', 'preview-blocked-single'];
   document.querySelectorAll('.day[data-date]').forEach(el => {
-    el.classList.remove(...previewCls);
-    if (!pendingStart) return;
+    el.classList.remove(...allPreviewCls);
+    if (!pendingStart || !hoverDate) return;
     const [y, m, d] = el.dataset.date.split('-').map(Number);
     const date = dn(y, m, d);
-    if (hoverDate) {
-      const ps = pendingStart <= hoverDate ? pendingStart : hoverDate;
-      const pe = pendingStart <= hoverDate ? hoverDate    : pendingStart;
-      if (date >= ps && date <= pe) {
-        if (sameDay(date, ps) && sameDay(date, pe)) el.classList.add('preview-single');
-        else if (sameDay(date, ps))                 el.classList.add('preview-start');
-        else if (sameDay(date, pe))                 el.classList.add('preview-end');
-        else                                         el.classList.add('preview');
-      }
+    const ps = pendingStart <= hoverDate ? pendingStart : hoverDate;
+    const pe = pendingStart <= hoverDate ? hoverDate    : pendingStart;
+    if (date >= ps && date <= pe) {
+      const blocked = overlapsAnyRange(ps, pe);
+      const prefix  = blocked ? 'preview-blocked' : 'preview';
+      if (sameDay(date, ps) && sameDay(date, pe)) el.classList.add(`${prefix}-single`);
+      else if (sameDay(date, ps))                 el.classList.add(`${prefix}-start`);
+      else if (sameDay(date, pe))                 el.classList.add(`${prefix}-end`);
+      else                                         el.classList.add(prefix);
     }
   });
 }
@@ -1004,6 +1003,19 @@ function removeRange(i) {
 }
 
 // ─────────────────────────── HINT ───────────────────────────
+let hintErrorTimer = null;
+function showHintError(msg) {
+  const hint = document.getElementById('hint-text');
+  if (hintErrorTimer) clearTimeout(hintErrorTimer);
+  hint.textContent = msg;
+  hint.style.color = 'var(--red)';
+  hint.classList.add('active');
+  hintErrorTimer = setTimeout(() => {
+    hint.style.color = '';
+    updateHint();
+  }, 2200);
+}
+
 function updateHint() {
   const hint = document.getElementById('hint-text');
   if (pendingStart) {
