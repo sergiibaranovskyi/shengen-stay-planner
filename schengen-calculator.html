@@ -257,6 +257,40 @@
   }
   .btn-clear:hover { border-color: var(--red); color: var(--red); }
 
+  .btn-save {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: .3rem .85rem;
+    font-size: .75rem;
+    color: var(--muted);
+    cursor: pointer;
+    transition: border-color .15s, color .15s, background .15s;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+  }
+  .btn-save:hover { border-color: var(--green); color: var(--green); }
+  .btn-save.saved { border-color: var(--green); color: var(--green); background: rgba(34,197,94,.08); }
+
+  .btn-load {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: .3rem .85rem;
+    font-size: .75rem;
+    color: var(--muted);
+    cursor: pointer;
+    transition: border-color .15s, color .15s, background .15s;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+  }
+  .btn-load:hover { border-color: var(--accent2); color: var(--accent2); }
+  .btn-load.loaded { border-color: var(--accent2); color: var(--accent2); background: var(--accent-dim); }
+
   /* ── Bottom row ── */
   .bottom-row {
     display: grid;
@@ -547,6 +581,14 @@
     <span>Past Schengen Stays — select date ranges</span>
     <div style="display:flex;align-items:center;gap:.75rem">
       <span class="hint" id="hint-text">Click a day to start a range</span>
+      <button class="btn-load" id="btn-load" onclick="loadRanges()">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Load
+      </button>
+      <button class="btn-save" id="btn-save" onclick="saveRanges()">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Save
+      </button>
       <button class="btn-clear" onclick="clearAll()">Clear All</button>
     </div>
   </div>
@@ -624,6 +666,7 @@
 
 </div>
 
+<script src="storage.js"></script>
 <script>
 // ─────────────────────────── STATE ───────────────────────────
 const today = (function() { const d = new Date(); d.setHours(0,0,0,0); return d; })();
@@ -822,11 +865,53 @@ function updatePreviewClasses() {
   });
 }
 
+function loadRanges() {
+  const saved = storageLoad();
+  const btn = document.getElementById('btn-load');
+  if (!saved || (saved.ranges.length === 0 && !saved.entryDate)) {
+    const orig = btn.innerHTML;
+    btn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Nothing saved`;
+    setTimeout(() => { btn.innerHTML = orig; }, 1800);
+    return;
+  }
+  ranges    = saved.ranges;
+  entryDate = saved.entryDate;
+  pendingStart = null;
+  hoverDate    = null;
+  if (entryDate) {
+    entryViewYear  = entryDate.getFullYear();
+    entryViewMonth = entryDate.getMonth();
+  }
+  updateAll();
+  renderEntryCalendar();
+  updateEntryDisplay();
+  document.getElementById('result-card').classList.remove('visible');
+
+  const orig = btn.innerHTML;
+  btn.classList.add('loaded');
+  btn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Loaded`;
+  setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('loaded'); }, 1800);
+}
+
+function saveRanges() {
+  storageSave(ranges, entryDate);
+  const btn = document.getElementById('btn-save');
+  btn.classList.add('saved');
+  btn.querySelector('svg').outerHTML; // no-op, keep icon
+  const originalHTML = btn.innerHTML;
+  btn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Saved`;
+  setTimeout(() => { btn.innerHTML = originalHTML; btn.classList.remove('saved'); }, 1800);
+}
+
 function clearAll() {
   ranges = [];
   pendingStart = null;
   hoverDate = null;
+  entryDate = null;
+  storageClear();
   updateAll();
+  renderEntryCalendar();
+  updateEntryDisplay();
   document.getElementById('result-card').classList.remove('visible');
 }
 
@@ -1034,6 +1119,18 @@ document.addEventListener('keydown', e => {
 });
 
 // ─────────────────────────── INIT ───────────────────────────
+(function restoreFromStorage() {
+  const saved = storageLoad();
+  if (saved) {
+    ranges    = saved.ranges;
+    entryDate = saved.entryDate;
+    if (entryDate) {
+      entryViewYear  = entryDate.getFullYear();
+      entryViewMonth = entryDate.getMonth();
+    }
+  }
+})();
+
 renderMainCalendars();
 renderEntryCalendar();
 updateEntryDisplay();
